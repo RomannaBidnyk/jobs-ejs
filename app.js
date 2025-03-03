@@ -1,8 +1,23 @@
 const express = require("express");
 require("express-async-errors");
 const app = express();
+const helmet = require("helmet");
+const xssClean = require("xss-clean");
+const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 const passport = require("passport");
+const cookieParser = require("cookie-parser");
+const csrf = require("host-csrf");
+
+app.use(helmet());
+app.use(xssClean());
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: "Too many requests from this IP, please try again after 15 minutes.",
+});
+
+app.use(limiter);
 
 const session = require("express-session");
 const MongoDBStore = require("connect-mongodb-session")(session);
@@ -33,13 +48,21 @@ if (app.get("env") === "production") {
 app.use(session(sessionParms));
 
 app.set("view engine", "ejs");
-app.use(require("body-parser").urlencoded({ extended: true }));
 
 const passportInit = require("./passport/passportInit");
 
 passportInit();
 app.use(passport.initialize());
 app.use(passport.session());
+
+app.use(cookieParser(process.env.SESSION_SECRET));
+app.use(express.urlencoded({ extended: true }));
+
+app.use(
+  csrf({
+    secret: process.env.SESSION_SECRET, // Use the same secret as the session
+  })
+);
 
 app.use(require("connect-flash")());
 
@@ -52,6 +75,9 @@ app.use("/sessions", require("./routes/sessionRoutes"));
 const secretWordRouter = require("./routes/secretWord");
 const auth = require("./middleware/auth");
 app.use("/secretWord", auth, secretWordRouter);
+
+const jobsRoutes = require("./routes/jobs");
+app.use("/jobs", auth, jobsRoutes);
 
 app.use((req, res) => {
   res.status(404).send(`That page (${req.url}) was not found.`);
