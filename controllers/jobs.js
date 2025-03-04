@@ -4,7 +4,7 @@ const parseValidationErrs = require("../util/parseValidationErr");
 const getAllJobs = async (req, res) => {
   try {
     const jobs = await Job.find({ createdBy: req.user._id });
-    res.render("jobs", { jobs });
+    res.render("jobs", { jobs, messages: req.flash() });
   } catch (err) {
     req.flash("error", "Failed to retrieve jobs.");
     res.redirect("/");
@@ -25,7 +25,10 @@ const createJob = async (req, res) => {
     req.flash("info", "Job created successfully.");
     res.redirect("/jobs");
   } catch (err) {
-    const errors = parseValidationErrs(err);
+    if (!req.flash) {
+      console.error("Flash is not initialized.");
+    }
+    const errors = parseValidationErrs(err, req);
     req.flash("error", errors);
     res.redirect("/jobs/new");
   }
